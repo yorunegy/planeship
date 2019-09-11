@@ -1,12 +1,17 @@
 phina.globalize(); // phina.jsがこれで使えるようになります。
 
 // こんな感じで画像や音のファイルを指定します
-let ASSETS = {
+const ASSETS = {
     image:{
         white:"img/planeship/white.png",
         black:"img/planeship/black.png",
         missile:"img/planeship/missile.png",
-        bg:"img/planeship/sky.jpg"
+        bg:"img/planeship/sky.jpg",
+        gameover:"img/planeship/GAME OVER.png",
+        gameclear:"img/planeship/GAME CLEAR.png"
+    },
+    sound:{
+      "BGM":"http://127.0.0.1:5500/sounds/BGM.mp3",
     }
 };
 
@@ -14,11 +19,11 @@ let WHITE_SPEED = 5;
 let BLACK_SPEED = 3;
 let MAX_SHOOT_COUNT = 3;
 let SHOOT_INTERVAL_FRAME = 5;
-let BLACK_HP = 1;
-let WHITE_HP = 50;
+const BLACK_HP = 2;
+const WHITE_HP = 5;
 
-let enemy;
-let player;
+let _enemy;
+let _player;
 let playerMissileGroup;
 let enemyMissileGroup;
 let whiteHpLabel;
@@ -40,9 +45,9 @@ phina.define('MainScene', {
     this.enemygroup = DisplayElement().addChildTo(this);
     // こんな感じで、飛行機オブジェクトを作って、画面に配置します。
     // WHITE
-    player = White(this).addChildTo(this.playergroup);
+    _player = White(this).addChildTo(this.playergroup);
     // BLACK
-    enemy = Black(this).addChildTo(this.enemygroup);
+    _enemy = Black(this).addChildTo(this.enemygroup);
 
     // BLACKとWHITEのHPを設定
     this.whiteHp = WHITE_HP;
@@ -51,27 +56,49 @@ phina.define('MainScene', {
     // BLACKとWHITEのHPを表示
     this.whiteHpLabel = hpLabel("white", this.whiteHp, 330, 600).addChildTo(this);
     this.blackHpLabel = hpLabel("black", this.blackHp, 330, 100).addChildTo(this);
+
+    // BGM
+    SoundManager.playMusic("BGM");
   },  // ここのカンマ忘れずに。MainSceneの中のinitとupdateです。
   // Scratchでいうと、「ずっと」です
   update:function(app) {
     const key = app.keyboard;
     if (key.getKey("space")) {
-      Missile(player.x, player.y,this.blackHpLabel).addChildTo(playerMissileGroup);
+      Missile(_player.x, _player.y,this.blackHpLabel).addChildTo(playerMissileGroup);
     }
+    this.hitTestMissileToEnemy();
     this.hitTestMissileToPlayer();
   },
   hitTestMissileToPlayer:function() {
+    enemyMissileGroup.children.forEach(missile => {
+      this.playergroup.children.forEach(player => {
+        if (missile.hitTestElement(player)) {
+          this.whiteHp -= 1
+          missile.remove();
+          this.whiteHpLabel.decreaseHp();
+          if (this.whiteHp === 0) {
+            player.remove();
+            Sprite("gameover", 300, 100).setPosition(330, 300).addChildTo(this);
+          }
+        }
+      })
+    })
+  },
+  hitTestMissileToEnemy:function() {
     playerMissileGroup.children.forEach(missile => {
       this.enemygroup.children.forEach(enemy => {
         if (missile.hitTestElement(enemy)) {
           this.blackHp -= 1;
           missile.remove();
+          this.blackHpLabel.decreaseHp();
           if (this.blackHp === 0) {
             enemy.remove();
+            Sprite("gameclear", 300, 100).setPosition(330, 300).addChildTo(this);
           }
         }
       })
     })
+
   }
 });
 
@@ -115,14 +142,13 @@ phina.define("Black", {
         this.scaleY *= -1; // Y方向の"大きさ"を逆にすると見た目が逆になります。
         this.speed = BLACK_SPEED;
         this.tweener.clear()
-                    .call(function() {
-                      this.shot();
-                    }, this)
+                    .call(this.shot,this)
                     .wait(600)
                     .setLoop(true);
+        this.scene = scene;
     },
     shot:function() {
-        EnemyMissile(this.x, this.y).addChildTo(this);
+        EnemyMissile(this.x, this.y).addChildTo(this.scene);
     },
     update:function() {
         if (this.x < 200 || this.x > 600) {
@@ -173,9 +199,6 @@ phina.define("EnemyMissile", {
     if (this.top > 900) {
       this.remove();
     }
-    if (this.hitTestElement(player)) {
-      this.remove();
-    }
   }
 });
 
@@ -189,7 +212,7 @@ phina.define("hpLabel", {
       this.hp = hp;
       this.name = name;
   },
-  decreaseHp:function(damage) {
+  decreaseHp:function(damage = 1) {
       this.hp -= damage;
   },
   update:function() {
@@ -207,3 +230,4 @@ phina.main(function() {
   });
   app.run();
 });
+
